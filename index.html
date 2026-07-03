@@ -35,6 +35,28 @@
         canvas { position: absolute; top: 0; left: 0; pointer-events: none; image-rendering: pixelated; }
         
         #infoPanel { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: #555; width: 100%; max-width: 500px; }
+
+        /* 우측 하단 스포이드 플로팅 버튼 스타일 */
+        #pipetteBtn {
+            position: absolute;
+            bottom: 40px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background-color: #6c757d;
+            color: white;
+            font-size: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            z-index: 100;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+        #pipetteBtn:active { transform: scale(0.95); }
     </style>
     <script src="/socket.io/socket.io.js"></script>
 </head>
@@ -68,8 +90,8 @@
                 <button id="addColorBtn">추가</button>
             </div>
             <div class="input-group">
-                <button id="pipetteBtn" class="secondary-btn">🧪 스포이드</button>
-                <button id="drawModeBtn" style="background-color:#28a745;">🖌️ 그리기</button>
+                <button id="moveModeBtn" class="secondary-btn">✋ 이동 모드</button>
+                <button id="drawModeBtn" style="background-color:#28a745;">🖌️ 그리기 모드</button>
             </div>
         </div>
 
@@ -86,6 +108,7 @@
 
     <div id="canvasContainer">
         <canvas id="pixelCanvas"></canvas>
+        <button id="pipetteBtn" title="스포이드">🧪</button>
     </div>
     
     <div id="infoPanel">
@@ -104,6 +127,7 @@
         const palette = document.getElementById('palette');
         const sortPaletteBtn = document.getElementById('sortPaletteBtn');
         const pipetteBtn = document.getElementById('pipetteBtn');
+        const moveModeBtn = document.getElementById('moveModeBtn');
         const drawModeBtn = document.getElementById('drawModeBtn');
         const zoomIndicator = document.getElementById('zoomIndicator');
         const mouseIndicator = document.getElementById('mouseIndicator');
@@ -125,7 +149,7 @@
             "#7dc7ff", "#4d31b8", "#6b50f6", "#99b1fb", "#4a4284", "#7a71c4", "#b5aef1", "#780c99", 
             "#aa38b9", "#e09ff9", "#cb007a", "#ec1f80", "#f38da9", "#9b5249", "#d18078", "#fab6a4", 
             "#684634", "#95682a", "#dba463", "#7b6352", "#9c846b", "#d6b594", "#d18051", "#f8b277", 
-            "#ffc5a5", "#6d743f", "#948c6b", "#cdc59e", "#333941", "#6d758d", "#b3b9d1", "#BA7E8C", "#E88A7C", "#F1C5BD", "#FCEAE7", "#FCF8F7", "#071A1A", "#0F0D0F", "#0F2224", "#0C0309", "#102225", "#110E11", "#131013", "#140A12", "#161215", "#161216", "#161316", "#17292C", "#1A1323", "#1B161A", "#1B3035", "#1F191E", "#203338", "#211B1F", "#221D22", "#252025", "#261E30", "#271E32", "#273D43", "#281F24", "#282328", "#2C272D", "#304C57", "#312C30", "#321B1D", "#321C1E", "#32293C", "#362D3F", "#382223", "#393135", "#393138", "#3B2325", "#3B2E33", "#3B4D53", "#3F373F", "#422629", "#423638", "#42384B", "#463C51", "#465960", "#472B2D", "#473E45", "#483F45", "#492E2F", "#4C3836", "#4F4655", "#504756", "#523434", "#523C3F", "#543233", "#55241B", "#563F3D", "#57413E", "#596870", "#5D3737", "#5D4745", "#5E4745", "#5C3F2E", "#613838", "#627A88", "#644E4B", "#655B6E", "#655C6A", "#66504C", "#673C3B", "#6A5552", "#6A615E", "#6B6169", "#6C3F3F", "#6C4241", "#6D5050", "#6D5653", "#6E4040", "#70656E", "#734545", "#734645", "#735956", "#735B4F", "#738A9D", "#755B58", "#755D5B", "#756A73", "#784D4C", "#786A68", "#794031", "#795E5A", "#796B70", "#7A605B", "#7B6D75", "#7E727C", "#7F5353", "#808B98", "#815656", "#865A5A", "#86716C", "#876D6D", "#877B86", "#877C85", "#8796A6", "#885B5C", "#8B5E5F", "#8E5F61", "#8E7473", "#8F7269", "#8F848F", "#915B48", "#917675", "#936667", "#946567", "#948084", "#94817F", "#948893", "#976C6D", "#978C97", "#996B6D", "#9B6D6E", "#9B7D81", "#9B7F7F", "#9D909B", "#9E7071", "#9F93A0", "#A19497", "#A26E5A", "#A27475", "#A38687", "#A37DAB", "#A47576", "#A497A4", "#A680B0", "#A79594", "#A799A8", "#A89AA8", "#A97C7C", "#A98585", "#AB7C7D", "#AB9CAB", "#AC8C8E", "#AC8D8D", "#AFA0B3", "#B18384", "#B18B8B", "#B37B67", "#B3897A", "#B49695", "#B78B8C", "#B79292", "#B7A6B2", "#BAAAB5", "#BB9381", "#BB9F9F", "#BC8874", "#BF9292", "#C09897", "#C1B0BC", "#C2A195", "#C3AAA4", "#C3B3C5", "#C49998", "#C49784", "#C49D9D", "#C69F9D", "#C89784", "#C8A190", "#C99F9E", "#C9B0A9", "#CAA6A5", "#CCA6A4", "#CCBBC2", "#CFA99A", "#D1ADAF", "#D1B4B5", "#D2AFAF", "#D2C4D1", "#D2C4D2", "#D5A9A6", "#D6ACAB", "#D7BDB3", "#D9AF9B", "#D9CED8", "#DAB8A9", "#DADAD9", "#DBBFBC", "#DBCFDB", "#DCBFBC", "#DEC8C0", "#DFB5B4", "#E1BCBD", "#E1CCC5", "#E2C6C2", "#E2CACA", "#E2D6E1", "#E3C6C2", "#E4E4E4", "#E5C4B3", "#E6BABB", "#E6CDCB", "#E6CCCA", "#E7E7E7", "#EAD8D7", "#EAD9D8", "#EADFEB", "#EBBCBE", "#EBD1C3", "#EBD3CF", "#EBDBD6", "#ECDEDD", "#ECDFDE", "#ECECEC", "#EEE4E4", "#EEE4E5", "#F0C0C2", "#F0D4CE", "#F1DED3", "#F3CEC8", "#F4C4C5", "#F4F2F0", "#F5C9C8", "#F5E5E6", "#F5EAE1", "#F5EBE7", "#F5E8E3", "#F6CCCA", "#F6C7C8", "#F7EAEF", "#F8E9F2", "#F8F1EE", "#FAD1CE", "#FACECE", "#FADEFB", "#FCD6CC", "#FDD3D3", "#FDD5D3", "#FDD8CD", "#FED5D6", "#FED7D8", "#FEDCDC", "#FEDDDD", "#FEE2D3", "#FEE3D5", "#FDF5FB"
+            "#ffc5a5", "#6d743f", "#948c6b", "#cdc59e", "#333941", "#6d758d", "#b3b9d1", "#071A1A", "#0F0D0F", "#0F2224", "#0C0309", "#102225", "#110E11", "#131013", "#140A12", "#161215", "#161216", "#161316", "#17292C", "#1A1323", "#1B161A", "#1B3035", "#1F191E", "#203338", "#211B1F", "#221D22", "#252025", "#261E30", "#271E32", "#273D43", "#281F24", "#282328", "#2C272D", "#304C57", "#312C30", "#321B1D", "#321C1E", "#32293C", "#362D3F", "#382223", "#393135", "#393138", "#3B2325", "#3B2E33", "#3B4D53", "#3F373F", "#422629", "#423638", "#42384B", "#463C51", "#465960", "#472B2D", "#473E45", "#483F45", "#492E2F", "#4C3836", "#4F4655", "#504756", "#523434", "#523C3F", "#543233", "#55241B", "#563F3D", "#57413E", "#596870", "#5D3737", "#5D4745", "#5E4745", "#5C3F2E", "#613838", "#627A88", "#644E4B", "#655B6E", "#655C6A", "#66504C", "#673C3B", "#6A5552", "#6A615E", "#6B6169", "#6C3F3F", "#6C4241", "#6D5050", "#6D5653", "#6E4040", "#70656E", "#734545", "#734645", "#735956", "#735B4F", "#738A9D", "#755B58", "#755D5B", "#756A73", "#784D4C", "#786A68", "#794031", "#795E5A", "#796B70", "#7A605B", "#7B6D75", "#7E727C", "#7F5353", "#808B98", "#815656", "#865A5A", "#86716C", "#876D6D", "#877B86", "#877C85", "#8796A6", "#885B5C", "#8B5E5F", "#8E5F61", "#8E7473", "#8F7269", "#8F848F", "#915B48", "#917675", "#936667", "#946567", "#948084", "#94817F", "#948893", "#976C6D", "#978C97", "#996B6D", "#9B6D6E", "#9B7D81", "#9B7F7F", "#9D909B", "#9E7071", "#9F93A0", "#A19497", "#A26E5A", "#A27475", "#A38687", "#A37DAB", "#A47576", "#A497A4", "#A680B0", "#A79594", "#A799A8", "#A89AA8", "#A97C7C", "#A98585", "#AB7C7D", "#AB9CAB", "#AC8C8E", "#AC8D8D", "#AFA0B3", "#B18384", "#B18B8B", "#B37B67", "#B3897A", "#B49695", "#B78B8C", "#B79292", "#B7A6B2", "#BAAAB5", "#BB9381", "#BB9F9F", "#BC8874", "#BF9292", "#C09897", "#C1B0BC", "#C2A195", "#C3AAA4", "#C3B3C5", "#C49998", "#C49784", "#C49D9D", "#C69F9D", "#C89784", "#C8A190", "#C99F9E", "#C9B0A9", "#CAA6A5", "#CCA6A4", "#CCBBC2", "#CFA99A", "#D1ADAF", "#D1B4B5", "#D2AFAF", "#D2C4D1", "#D2C4D2", "#D5A9A6", "#D6ACAB", "#D7BDB3", "#D9AF9B", "#D9CED8", "#DAB8A9", "#DADAD9", "#DBBFBC", "#DBCFDB", "#DCBFBC", "#DEC8C0", "#DFB5B4", "#E1BCBD", "#E1CCC5", "#E2C6C2", "#E2CACA", "#E2D6E1", "#E3C6C2", "#E4E4E4", "#E5C4B3", "#E6BABB", "#E6CDCB", "#E6CCCA", "#E7E7E7", "#EAD8D7", "#EAD9D8", "#EADFEB", "#EBBCBE", "#EBD1C3", "#EBD3CF", "#EBDBD6", "#ECDEDD", "#ECDFDE", "#ECECEC", "#EEE4E4", "#EEE4E5", "#F0C0C2", "#F0D4CE", "#F1DED3", "#F3CEC8", "#F4C4C5", "#F4F2F0", "#F5C9C8", "#F5E5E6", "#F5EAE1", "#F5EBE7", "#F5E8E3", "#F6CCCA", "#F6C7C8", "#F7EAEF", "#F8E9F2", "#F8F1EE", "#FAD1CE", "#FACECE", "#FADEFB", "#FCD6CC", "#FDD3D3", "#FDD5D3", "#FDD8CD", "#FED5D6", "#FED7D8", "#FEDCDC", "#FEDDDD", "#FEE2D3", "#FEE3D5", "#FDF5FB"
         ];
 
         const WORLD_SIZE = 4000;
@@ -133,13 +157,14 @@
         
         let currentSelectedColor = 'transparent';
         let canvasMatrix = {}; 
-        let currentMode = 'draw';
+        let currentMode = 'draw'; // 'draw', 'move', 'pipette'
         
         let zoom = 1.0;
         let panX = 0, panY = 0;
-        let isDragging = false;
+        let isDrawing = false; // 그리기를 위한 변수
+        let isPanning = false; // 이동(드래그)을 위한 변수
         let startX = 0, startY = 0;
-        let hasMoved = false;
+        let lastDrawCoord = { x: -1, y: -1 }; // 연속 그리기 시 중복 전송 방지
 
         let initTouchDist = 0;
         let initZoom = 1.0;
@@ -187,35 +212,61 @@
 
         function getTouchDist(t1, t2) { return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY); }
 
+        // 포인터 다운 이벤트 통합 처리
         function onPointerDown(clientX, clientY, isMultiTouch = false) {
-            isDragging = true;
-            hasMoved = false;
-            if (!isMultiTouch) {
+            const coord = screenToWorld(clientX, clientY);
+            
+            if (isMultiTouch) {
+                isPanning = false;
+                isDrawing = false;
+                return;
+            }
+
+            if (currentMode === 'pipette') {
+                handlePipette(clientX, clientY);
+            } else if (currentMode === 'draw') {
+                // 그리기 모드일 때는 한 점 찍기 및 연속 그리기 준비
+                isDrawing = true;
+                drawPixelAt(coord.x, coord.y);
+            } else if (currentMode === 'move') {
+                // 이동 모드일 때는 화면 스크롤 준비
+                isPanning = true;
                 startX = clientX - panX;
                 startY = clientY - panY;
             }
         }
 
+        // 포인터 무브 이벤트 통합 처리
         function onPointerMove(clientX, clientY) {
             const coord = screenToWorld(clientX, clientY);
             if (coord.x >= 0 && coord.x < WORLD_SIZE && coord.y >= 0 && coord.y < WORLD_SIZE) {
                 mouseIndicator.textContent = `좌표: X: ${coord.x}, Y: ${coord.y}`;
             }
-            if (!isDragging) return;
-            hasMoved = true;
-            panX = clientX - startX;
-            panY = clientY - startY;
-            updateTransform();
+            
+            if (isDrawing && currentMode === 'draw') {
+                // 선으로 슥 그리는 연속 입력 기능 구현
+                if (coord.x !== lastDrawCoord.x || coord.y !== lastDrawCoord.y) {
+                    drawPixelAt(coord.x, coord.y);
+                }
+            } else if (isPanning && currentMode === 'move') {
+                panX = clientX - startX;
+                panY = clientY - startY;
+                updateTransform();
+            }
         }
 
+        function onPointerUp() {
+            isDrawing = false;
+            isPanning = false;
+            lastDrawCoord = { x: -1, y: -1 };
+        }
+
+        // 마우스 리스너
         container.addEventListener('mousedown', (e) => { if (e.button === 0) onPointerDown(e.clientX, e.clientY); });
         window.addEventListener('mousemove', (e) => { onPointerMove(e.clientX, e.clientY); });
-        window.addEventListener('mouseup', (e) => {
-            if (!isDragging) return;
-            isDragging = false;
-            if (!hasMoved) handleCanvasClick(e.clientX, e.clientY);
-        });
+        window.addEventListener('mouseup', onPointerUp);
 
+        // 터치 리스너 (모바일 대응)
         container.addEventListener('touchstart', (e) => {
             const rect = container.getBoundingClientRect();
             const touch = e.touches[0];
@@ -223,16 +274,15 @@
                 if (e.touches.length === 1) {
                     onPointerDown(touch.clientX, touch.clientY);
                 } else if (e.touches.length === 2) {
-                    isDragging = false;
-                    hasMoved = true;
                     initTouchDist = getTouchDist(e.touches[0], e.touches[1]);
                     initZoom = zoom;
+                    onPointerDown(0, 0, true);
                 }
             }
         }, { passive: true });
 
         window.addEventListener('touchmove', (e) => {
-            if (e.touches.length === 1 && isDragging) {
+            if (e.touches.length === 1) {
                 onPointerMove(e.touches[0].clientX, e.touches[0].clientY);
             } else if (e.touches.length === 2 && initTouchDist > 0) {
                 const dist = getTouchDist(e.touches[0], e.touches[1]);
@@ -251,15 +301,7 @@
             }
         }, { passive: true });
 
-        window.addEventListener('touchend', (e) => {
-            if (isDragging) {
-                isDragging = false;
-                if (!hasMoved && e.changedTouches.length > 0) {
-                    handleCanvasClick(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
-                }
-            }
-            initTouchDist = 0;
-        });
+        window.addEventListener('touchend', onPointerUp);
 
         function updateTransform() {
             zoomIndicator.textContent = `🔍 ${Math.round(zoom * 100)}%`;
@@ -275,32 +317,38 @@
             updateTransform();
         });
 
-        function handleCanvasClick(clientX, clientY) {
+        // 실제 픽셀을 찍는 함수
+        function drawPixelAt(x, y) {
+            if (x < 0 || x >= WORLD_SIZE || y < 0 || y >= WORLD_SIZE) return;
+            
+            lastDrawCoord = { x, y };
+            if (currentSelectedColor === 'transparent') { delete canvasMatrix[`${x},${y}`]; } 
+            else { canvasMatrix[`${x},${y}`] = currentSelectedColor; }
+            
+            redrawCanvas();
+            socket.emit('drawPixel', { x: x, y: y, color: currentSelectedColor });
+        }
+
+        // 스포이드 기능 처리
+        function handlePipette(clientX, clientY) {
             const coord = screenToWorld(clientX, clientY);
             if (coord.x < 0 || coord.x >= WORLD_SIZE || coord.y < 0 || coord.y >= WORLD_SIZE) return;
 
-            if (currentMode === 'pipette') {
-                let clickedColor = 'transparent';
-                if (templatePixelData) {
-                    const tx = coord.x - templateTargetX;
-                    const ty = coord.y - templateTargetY;
-                    if (tx >= 0 && tx < templateWidth && ty >= 0 && ty < templateHeight) {
-                        const idx = (ty * templateWidth + tx) * 4;
-                        if (templatePixelData[idx + 3] > 30) {
-                            clickedColor = "#" + ((1 << 24) + (templatePixelData[idx] << 16) + (templatePixelData[idx + 1] << 8) + templatePixelData[idx + 2]).toString(16).slice(1).toUpperCase();
-                        }
+            let clickedColor = 'transparent';
+            if (templatePixelData) {
+                const tx = coord.x - templateTargetX;
+                const ty = coord.y - templateTargetY;
+                if (tx >= 0 && tx < templateWidth && ty >= 0 && ty < templateHeight) {
+                    const idx = (ty * templateWidth + tx) * 4;
+                    if (templatePixelData[idx + 3] > 30) {
+                        clickedColor = "#" + ((1 << 24) + (templatePixelData[idx] << 16) + (templatePixelData[idx + 1] << 8) + templatePixelData[idx + 2]).toString(16).slice(1).toUpperCase();
                     }
                 }
-                if (clickedColor === 'transparent') { clickedColor = canvasMatrix[`${coord.x},${coord.y}`] || 'transparent'; }
-                if (clickedColor === 'transparent') { selectColor('transparent', document.querySelector('.color-box.eraser')); } 
-                else { addNewColorToPalette(clickedColor); }
-                setMode('draw');
-            } else if (currentMode === 'draw') {
-                if (currentSelectedColor === 'transparent') { delete canvasMatrix[`${coord.x},${coord.y}`]; } 
-                else { canvasMatrix[`${coord.x},${coord.y}`] = currentSelectedColor; }
-                redrawCanvas();
-                socket.emit('drawPixel', { x: coord.x, y: coord.y, color: currentSelectedColor });
             }
+            if (clickedColor === 'transparent') { clickedColor = canvasMatrix[`${coord.x},${coord.y}`] || 'transparent'; }
+            if (clickedColor === 'transparent') { selectColor('transparent', document.querySelector('.color-box.eraser')); } 
+            else { addNewColorToPalette(clickedColor); }
+            setMode('draw');
         }
 
         templateInput.addEventListener('change', (e) => {
@@ -362,16 +410,6 @@
                 }
             });
 
-            ctx.strokeStyle = 'rgba(255, 0, 0, 0.3)';
-            ctx.lineWidth = 2 / zoom;
-            ctx.beginPath();
-            for (let i = 1; i < 4; i++) {
-                const pos = i * 1000 * PIXEL_SIZE;
-                if (pos >= startX * PIXEL_SIZE && pos <= endX * PIXEL_SIZE) { ctx.moveTo(pos, startY * PIXEL_SIZE); ctx.lineTo(pos, endY * PIXEL_SIZE); }
-                if (pos >= startY * PIXEL_SIZE && pos <= endY * PIXEL_SIZE) { ctx.moveTo(startX * PIXEL_SIZE, pos); ctx.lineTo(endX * PIXEL_SIZE, pos); }
-            }
-            ctx.stroke();
-
             if (templatePixelData) {
                 const tStartX = Math.max(startX, templateTargetX); const tStartY = Math.max(startY, templateTargetY);
                 const tEndX = Math.min(endX, templateTargetX + templateWidth); const tEndY = Math.min(endY, templateTargetY + templateHeight);
@@ -395,8 +433,6 @@
 
         socket.on('initCanvas', (data) => {
             canvasMatrix = data.matrix || {};
-            
-            // 💡 서버에 저장되어 있던 커스텀 색상들을 팔레트에 자동 복구
             if (data.customColors && data.customColors.length > 0) {
                 data.customColors.forEach(color => {
                     const exists = Array.from(palette.children).some(box => box.getAttribute('data-color') === color);
@@ -409,12 +445,10 @@
                     }
                 });
             }
-            
             zoom = 0.15; panX = 10; panY = 10;
             resizeView();
         });
 
-        // 💡 다른 유저가 추가한 색상도 내 화면에 실시간 동기화
         socket.on('syncNewColor', (hexValue) => {
             const exists = Array.from(palette.children).some(box => box.getAttribute('data-color') === hexValue);
             if (!exists) {
@@ -468,8 +502,6 @@
                 targetBox.style.backgroundColor = hexValue;
                 targetBox.setAttribute('data-color', hexValue);
                 palette.appendChild(targetBox);
-                
-                // 💡 새 색상이 추가되었음을 서버에 알림 (서버가 json에 기록하도록 함)
                 socket.emit('newColorAdded', hexValue);
             } else {
                 targetBox = Array.from(palette.children).find(box => box.getAttribute('data-color') === hexValue);
@@ -489,9 +521,15 @@
             currentMode = mode;
             if (mode === 'pipette') {
                 pipetteBtn.style.backgroundColor = '#28a745';
+                moveModeBtn.style.backgroundColor = '#6c757d';
+                drawModeBtn.style.backgroundColor = '#6c757d';
+            } else if (mode === 'move') {
+                pipetteBtn.style.backgroundColor = '#6c757d';
+                moveModeBtn.style.backgroundColor = '#007bff';
                 drawModeBtn.style.backgroundColor = '#6c757d';
             } else {
                 pipetteBtn.style.backgroundColor = '#6c757d';
+                moveModeBtn.style.backgroundColor = '#6c757d';
                 drawModeBtn.style.backgroundColor = '#28a745';
             }
         }
@@ -509,7 +547,11 @@
             }
         });
 
-        pipetteBtn.addEventListener('click', () => setMode('pipette'));
+        pipetteBtn.addEventListener('click', () => {
+            if(currentMode === 'pipette') setMode('draw');
+            else setMode('pipette');
+        });
+        moveModeBtn.addEventListener('click', () => setMode('move'));
         drawModeBtn.addEventListener('click', () => setMode('draw'));
         
         resizeView();
