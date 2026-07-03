@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>4000x4000 모바일 멀티 월드</title>
+    <style>
+        body { display: flex; flex-direction: column; align-items: center; background-color: #f0f0f0; font-family: sans-serif; margin: 0; padding: 10px; box-sizing: border-box; touch-action: none; height: 100vh; overflow: hidden; }
+        h1 { margin: 5px 0 10px 0; font-size: 18px; text-align: center; }
+        
+        #controls { display: flex; flex-direction: column; gap: 8px; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); width: 100%; max-width: 500px; z-index: 10; box-sizing: border-box; font-size: 12px; }
+        .control-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+        .input-group { display: flex; align-items: center; gap: 4px; }
+        
+        input[type="text"], input[type="number"] { padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; font-size: 12px; }
+        .coord-input { width: 40px; }
+        #hexInput { width: 55px; text-transform: uppercase; }
+        button { padding: 4px 8px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; -webkit-tap-highlight-color: transparent; }
+        button:hover { background-color: #0056b0; }
+        .secondary-btn { background-color: #6c757d; }
+
+        #paletteContainer { display: flex; flex-direction: column; gap: 4px; background: #fff; padding: 6px; border: 1px solid #ccc; border-radius: 6px; width: 100%; box-sizing: border-box; }
+        .palette-header { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #666; font-weight: bold; }
+        #palette { display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+        .color-box { width: 26px; height: 26px; border-radius: 4px; border: 1px solid #ddd; cursor: pointer; flex-shrink: 0; position: relative; -webkit-tap-highlight-color: transparent; }
+        .color-box.selected { border: 2px solid #000; box-shadow: 0 0 4px rgba(0,0,0,0.5); }
+        
+        .color-box.eraser {
+            background-image: linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%);
+            background-size: 8px 8px; background-position: 0 0, 0 4px, 4px -4px, -4px 0px; background-color: #fff;
+        }
+
+        #canvasContainer { width: 100%; max-width: 500px; flex: 1; min-height: 200px; border: 2px solid #333; background-color: #ffffff; overflow: hidden; position: relative; border-radius: 4px; cursor: grab; }
+        #canvasContainer:active { cursor: grabbing; }
+        canvas { position: absolute; top: 0; left: 0; pointer-events: none; image-rendering: pixelated; }
+        
+        #infoPanel { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: #555; width: 100%; max-width: 500px; }
+    </style>
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+
+    <h1>4000x4000 모바일 멀티 월드</h1>
+    
+    <div id="controls">
+        <div class="control-row">
+            <div class="input-group">
+                <span>📍 <b>이동:</b></span>
+                X <input type="number" id="moveX" class="coord-input" value="0">
+                Y <input type="number" id="moveY" class="coord-input" value="0">
+                <button id="gotoBtn">GO</button>
+            </div>
+            
+            <div class="input-group">
+                <span>🖼️ <b>도안:</b></span>
+                X <input type="number" id="imgX" class="coord-input" value="0">
+                Y <input type="number" id="imgY" class="coord-input" value="0">
+                <input type="file" id="templateInput" accept="image/*" style="display:none;">
+                <button onclick="document.getElementById('templateInput').click()" class="secondary-btn">선택</button>
+                <button id="clearTemplateBtn" class="secondary-btn" style="background-color:#dc3545; display:none;">X</button>
+            </div>
+        </div>
+
+        <div class="control-row">
+            <div class="input-group">
+                <label for="hexInput">⌨️ 헥스: </label>
+                <input type="text" id="hexInput" value="#FF0000" maxlength="7">
+                <button id="addColorBtn">추가</button>
+            </div>
+            <div class="input-group">
+                <button id="pipetteBtn" class="secondary-btn">🧪 스포이드</button>
+                <button id="drawModeBtn" style="background-color:#28a745;">🖌️ 그리기</button>
+            </div>
+        </div>
+
+        <div id="paletteContainer">
+            <div class="palette-header">
+                <span>🎨 팔레트 (옆으로 넘겨보세요 ➡)</span>
+                <button id="sortPaletteBtn" class="secondary-btn" style="padding: 2px 6px; font-size: 10px;">🌈 정렬</button>
+            </div>
+            <div id="palette">
+                <div class="color-box eraser selected" title="지우개" data-color="transparent"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="canvasContainer">
+        <canvas id="pixelCanvas"></canvas>
+    </div>
+    
+    <div id="infoPanel">
+        <span id="mouseIndicator">좌표: X: -, Y: -</span>
+        <span id="zoomIndicator">🔍 100%</span>
+    </div>
+
+    <script>
+        const socket = io();
+        const container = document.getElementById('canvasContainer');
+        const canvas = document.getElementById('pixelCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        const hexInput = document.getElementById('hexInput');
+        const addColorBtn = document.getElementById('addColorBtn');
+        const palette = document.getElementById('palette');
+        const sortPaletteBtn = document.getElementById('sortPaletteBtn');
+        const pipetteBtn = document.getElementById('pipetteBtn');
+        const drawModeBtn = document.getElementById('drawModeBtn');
+        const zoomIndicator = document.getElementById('zoomIndicator');
+        const mouseIndicator = document.getElementById('mouseIndicator');
+        
+        const moveXInput = document.getElementById('moveX');
+        const moveYInput = document.getElementById('moveY');
+        const gotoBtn = document.getElementById('gotoBtn');
+        
+        const imgXInput = document.getElementById('imgX');
+        const imgYInput = document.getElementById('imgY');
+        const templateInput = document.getElementById('templateInput');
+        const clearTemplateBtn = document.getElementById('clearTemplateBtn');
+
+        const defaultColors = [
+            "#000000", "#3c3c3c", "#787878", "#aaaaaa", "#d2d2d2", "#ffffff", "#600018", "#a50e1e", 
+            "#ed1c24", "#fa8072", "#e45c1a", "#ff7f27", "#f6aa09", "#f9dd3b", "#fffabc", "#9c8431", 
+            "#c5ad31", "#e8d45f", "#4a6b3a", "#5a944a", "#84c573", "#0eb968", "#13e67b", "#87ff5e", 
+            "#0c816e", "#10aea6", "#13e1be", "#0f799f", "#60f7f2", "#bbfaf2", "#28509e", "#4093e4", 
+            "#7dc7ff", "#4d31b8", "#6b50f6", "#99b1fb", "#4a4284", "#7a71c4", "#b5aef1", "#780c99", 
+            "#aa38b9", "#e09ff9", "#cb007a", "#ec1f80", "#f38da9", "#9b5249", "#d18078", "#fab6a4", 
+            "#684634", "#95682a", "#dba463", "#7b6352", "#9c846b", "#d6b594", "#d18051", "#f8b277", 
+            "#ffc5a5", "#6d743f", "#948c6b", "#cdc59e", "#333941", "#6d758d", "#b3b9d1", "#BA7E8C", "#E88A7C", "#F1C5BD", "#FCEAE7", "#FCF8F7"
+        ];
+
+        const WORLD_SIZE = 4000;
+        const PIXEL_SIZE = 12;
+        
+        let currentSelectedColor = 'transparent';
+        let canvasMatrix = {}; 
+        let currentMode = 'draw';
+        
+        let zoom = 1.0;
+        let panX = 0, panY = 0;
+        let isDragging = false;
+        let startX = 0, startY = 0;
+        let hasMoved = false;
+
+        let initTouchDist = 0;
+        let initZoom = 1.0;
+
+        let templatePixelData = null;
+        let templateWidth = 0, templateHeight = 0;
+        let templateTargetX = 0, templateTargetY = 0;
+
+        function resizeView() {
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            redrawCanvas();
+        }
+        window.addEventListener('resize', resizeView);
+
+        defaultColors.forEach(color => {
+            const box = document.createElement('div');
+            box.className = 'color-box';
+            box.style.backgroundColor = color;
+            box.setAttribute('data-color', color);
+            palette.appendChild(box);
+        });
+
+        function screenToWorld(clientX, clientY) {
+            const rect = container.getBoundingClientRect();
+            const x = (clientX - rect.left - panX) / zoom;
+            const y = (clientY - rect.top - panY) / zoom;
+            return { x: Math.floor(x / PIXEL_SIZE), y: Math.floor(y / PIXEL_SIZE) };
+        }
+
+        container.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomFactor = 1.15;
+            const rect = container.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const worldX = (mouseX - panX) / zoom;
+            const worldY = (mouseY - panY) / zoom;
+            if (e.deltaY < 0) { if (zoom < 40) zoom *= zoomFactor; } 
+            else { if (zoom > 0.05) zoom /= zoomFactor; }
+            panX = mouseX - worldX * zoom;
+            panY = mouseY - worldY * zoom;
+            updateTransform();
+        });
+
+        function getTouchDist(t1, t2) { return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY); }
+
+        function onPointerDown(clientX, clientY, isMultiTouch = false) {
+            isDragging = true;
+            hasMoved = false;
+            if (!isMultiTouch) {
+                startX = clientX - panX;
+                startY = clientY - panY;
+            }
+        }
+
+        function onPointerMove(clientX, clientY) {
+            const coord = screenToWorld(clientX, clientY);
+            if (coord.x >= 0 && coord.x < WORLD_SIZE && coord.y >= 0 && coord.y < WORLD_SIZE) {
+                mouseIndicator.textContent = `좌표: X: ${coord.x}, Y: ${coord.y}`;
+            }
+            if (!isDragging) return;
+            hasMoved = true;
+            panX = clientX - startX;
+            panY = clientY - startY;
+            updateTransform();
+        }
+
+        container.addEventListener('mousedown', (e) => { if (e.button === 0) onPointerDown(e.clientX, e.clientY); });
+        window.addEventListener('mousemove', (e) => { onPointerMove(e.clientX, e.clientY); });
+        window.addEventListener('mouseup', (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+            if (!hasMoved) handleCanvasClick(e.clientX, e.clientY);
+        });
+
+        container.addEventListener('touchstart', (e) => {
+            const rect = container.getBoundingClientRect();
+            const touch = e.touches[0];
+            if (touch.clientX >= rect.left && touch.clientX <= rect.right && touch.clientY >= rect.top && touch.clientY <= rect.bottom) {
+                if (e.touches.length === 1) {
+                    onPointerDown(touch.clientX, touch.clientY);
+                } else if (e.touches.length === 2) {
+                    isDragging = false;
+                    hasMoved = true;
+                    initTouchDist = getTouchDist(e.touches[0], e.touches[1]);
+                    initZoom = zoom;
+                }
+            }
+        }, { passive: true });
+
+        window.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 1 && isDragging) {
+                onPointerMove(e.touches[0].clientX, e.touches[0].clientY);
+            } else if (e.touches.length === 2 && initTouchDist > 0) {
+                const dist = getTouchDist(e.touches[0], e.touches[1]);
+                if (dist > 0) {
+                    const factor = dist / initTouchDist;
+                    const rect = container.getBoundingClientRect();
+                    const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+                    const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+                    const worldX = (midX - panX) / zoom;
+                    const worldY = (midY - panY) / zoom;
+                    zoom = Math.max(0.05, Math.min(40, initZoom * factor));
+                    panX = midX - worldX * zoom;
+                    panY = midY - worldY * zoom;
+                    updateTransform();
+                }
+            }
+        }, { passive: true });
+
+        window.addEventListener('touchend', (e) => {
+            if (isDragging) {
+                isDragging = false;
+                if (!hasMoved && e.changedTouches.length > 0) {
+                    handleCanvasClick(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+                }
+            }
+            initTouchDist = 0;
+        });
+
+        function updateTransform() {
+            zoomIndicator.textContent = `🔍 ${Math.round(zoom * 100)}%`;
+            redrawCanvas();
+        }
+
+        gotoBtn.addEventListener('click', () => {
+            const targetX = parseInt(moveXInput.value) || 0;
+            const targetY = parseInt(moveYInput.value) || 0;
+            zoom = 1.0;
+            panX = (container.clientWidth / 2) - (targetX * PIXEL_SIZE * zoom);
+            panY = (container.clientHeight / 2) - (targetY * PIXEL_SIZE * zoom);
+            updateTransform();
+        });
+
+        function handleCanvasClick(clientX, clientY) {
+            const coord = screenToWorld(clientX, clientY);
+            if (coord.x < 0 || coord.x >= WORLD_SIZE || coord.y < 0 || coord.y >= WORLD_SIZE) return;
+
+            if (currentMode === 'pipette') {
+                let clickedColor = 'transparent';
+                if (templatePixelData) {
+                    const tx = coord.x - templateTargetX;
+                    const ty = coord.y - templateTargetY;
+                    if (tx >= 0 && tx < templateWidth && ty >= 0 && ty < templateHeight) {
+                        const idx = (ty * templateWidth + tx) * 4;
+                        if (templatePixelData[idx + 3] > 30) {
+                            clickedColor = "#" + ((1 << 24) + (templatePixelData[idx] << 16) + (templatePixelData[idx + 1] << 8) + templatePixelData[idx + 2]).toString(16).slice(1).toUpperCase();
+                        }
+                    }
+                }
+                if (clickedColor === 'transparent') { clickedColor = canvasMatrix[`${coord.x},${coord.y}`] || 'transparent'; }
+                if (clickedColor === 'transparent') { selectColor('transparent', document.querySelector('.color-box.eraser')); } 
+                else { addNewColorToPalette(clickedColor); }
+                setMode('draw');
+            } else if (currentMode === 'draw') {
+                if (currentSelectedColor === 'transparent') { delete canvasMatrix[`${coord.x},${coord.y}`]; } 
+                else { canvasMatrix[`${coord.x},${coord.y}`] = currentSelectedColor; }
+                redrawCanvas();
+                socket.emit('drawPixel', { x: coord.x, y: coord.y, color: currentSelectedColor });
+            }
+        }
+
+        templateInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            templateTargetX = parseInt(imgXInput.value) || 0;
+            templateTargetY = parseInt(imgYInput.value) || 0;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    templateWidth = img.width; templateHeight = img.height;
+                    const hiddenCanvas = document.createElement('canvas');
+                    hiddenCanvas.width = templateWidth; hiddenCanvas.height = templateHeight;
+                    const hiddenCtx = hiddenCanvas.getContext('2d');
+                    hiddenCtx.drawImage(img, 0, 0);
+                    templatePixelData = hiddenCtx.getImageData(0, 0, templateWidth, templateHeight).data;
+                    clearTemplateBtn.style.display = 'inline-block';
+                    zoom = 1.0;
+                    panX = (container.clientWidth / 2) - ((templateTargetX + templateWidth / 2) * PIXEL_SIZE * zoom);
+                    panY = (container.clientHeight / 2) - ((templateTargetY + templateHeight / 2) * PIXEL_SIZE * zoom);
+                    updateTransform();
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        clearTemplateBtn.addEventListener('click', () => {
+            templatePixelData = null; templateInput.value = ''; clearTemplateBtn.style.display = 'none'; redrawCanvas();
+        });
+
+        function redrawCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(panX, panY);
+            ctx.scale(zoom, zoom);
+
+            const startX = Math.max(0, Math.floor(-panX / (PIXEL_SIZE * zoom)));
+            const startY = Math.max(0, Math.floor(-panY / (PIXEL_SIZE * zoom)));
+            const endX = Math.min(WORLD_SIZE, Math.ceil((canvas.width - panX) / (PIXEL_SIZE * zoom)));
+            const endY = Math.min(WORLD_SIZE, Math.ceil((canvas.height - panY) / (PIXEL_SIZE * zoom)));
+
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(startX * PIXEL_SIZE, startY * PIXEL_SIZE, (endX - startX) * PIXEL_SIZE, (endY - startY) * PIXEL_SIZE);
+
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.04)';
+            ctx.lineWidth = 1 / zoom;
+            ctx.beginPath();
+            for (let x = startX; x <= endX; x++) { ctx.moveTo(x * PIXEL_SIZE, startY * PIXEL_SIZE); ctx.lineTo(x * PIXEL_SIZE, endY * PIXEL_SIZE); }
+            for (let y = startY; y <= endY; y++) { ctx.moveTo(startX * PIXEL_SIZE, y * PIXEL_SIZE); ctx.lineTo(endX * PIXEL_SIZE, y * PIXEL_SIZE); }
+            ctx.stroke();
+
+            Object.keys(canvasMatrix).forEach(key => {
+                const [x, y] = key.split(',').map(Number);
+                if (x >= startX && x < endX && y >= startY && y < endY) {
+                    ctx.fillStyle = canvasMatrix[key];
+                    ctx.fillRect(x * PIXEL_SIZE, y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE);
+                }
+            });
+
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.3)';
+            ctx.lineWidth = 2 / zoom;
+            ctx.beginPath();
+            for (let i = 1; i < 4; i++) {
+                const pos = i * 1000 * PIXEL_SIZE;
+                if (pos >= startX * PIXEL_SIZE && pos <= endX * PIXEL_SIZE) { ctx.moveTo(pos, startY * PIXEL_SIZE); ctx.lineTo(pos, endY * PIXEL_SIZE); }
+                if (pos >= startY * PIXEL_SIZE && pos <= endY * PIXEL_SIZE) { ctx.moveTo(startX * PIXEL_SIZE, pos); ctx.lineTo(endX * PIXEL_SIZE, pos); }
+            }
+            ctx.stroke();
+
+            if (templatePixelData) {
+                const tStartX = Math.max(startX, templateTargetX); const tStartY = Math.max(startY, templateTargetY);
+                const tEndX = Math.min(endX, templateTargetX + templateWidth); const tEndY = Math.min(endY, templateTargetY + templateHeight);
+                for (let y = tStartY; y < tEndY; y++) {
+                    for (let x = tStartX; x < tEndX; x++) {
+                        const tx = x - templateTargetX; const ty = y - templateTargetY; const idx = (ty * templateWidth + tx) * 4;
+                        if (templatePixelData[idx + 3] > 30) {
+                            const targetColor = "#" + ((1 << 24) + (templatePixelData[idx] << 16) + (templatePixelData[idx + 1] << 8) + templatePixelData[idx + 2]).toString(16).slice(1).toUpperCase();
+                            const currentColor = (canvasMatrix[`${x},${y}`] || 'transparent').toUpperCase();
+                            if (currentColor !== targetColor) {
+                                ctx.fillStyle = targetColor;
+                                const dotSize = 3; const offset = (PIXEL_SIZE - dotSize) / 2;
+                                ctx.fillRect(x * PIXEL_SIZE + offset, y * PIXEL_SIZE + offset, dotSize, dotSize);
+                            }
+                        }
+                    }
+                }
+            }
+            ctx.restore();
+        }
+
+        socket.on('initCanvas', (data) => {
+            canvasMatrix = data.matrix || {};
+            
+            // 💡 서버에 저장되어 있던 커스텀 색상들을 팔레트에 자동 복구
+            if (data.customColors && data.customColors.length > 0) {
+                data.customColors.forEach(color => {
+                    const exists = Array.from(palette.children).some(box => box.getAttribute('data-color') === color);
+                    if (!exists) {
+                        const box = document.createElement('div');
+                        box.className = 'color-box';
+                        box.style.backgroundColor = color;
+                        box.setAttribute('data-color', color);
+                        palette.appendChild(box);
+                    }
+                });
+            }
+            
+            zoom = 0.15; panX = 10; panY = 10;
+            resizeView();
+        });
+
+        // 💡 다른 유저가 추가한 색상도 내 화면에 실시간 동기화
+        socket.on('syncNewColor', (hexValue) => {
+            const exists = Array.from(palette.children).some(box => box.getAttribute('data-color') === hexValue);
+            if (!exists) {
+                const targetBox = document.createElement('div');
+                targetBox.className = 'color-box';
+                targetBox.style.backgroundColor = hexValue;
+                targetBox.setAttribute('data-color', hexValue);
+                palette.appendChild(targetBox);
+            }
+        });
+
+        socket.on('updatePixel', (data) => {
+            if (data.color === 'transparent') { delete canvasMatrix[`${data.x},${data.y}`]; } 
+            else { canvasMatrix[`${data.x},${data.y}`] = data.color; }
+            redrawCanvas();
+        });
+
+        function hexToHsvSortValue(hex) {
+            if (hex === 'transparent') return -1;
+            let r = parseInt(hex.substring(1, 3), 16) / 255;
+            let g = parseInt(hex.substring(3, 5), 16) / 255;
+            let b = parseInt(hex.substring(5, 7), 16) / 255;
+            let max = Math.max(r, g, b), min = Math.min(r, g, b);
+            let h, s, v = max; let d = max - min;
+            s = max === 0 ? 0 : d / max;
+            if (max === min) h = 0;
+            else {
+                switch (max) {
+                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                    case g: h = (b - r) / d + 2; break;
+                    case b: h = (r - g) / d + 4; break;
+                }
+                h /= 6;
+            }
+            return h * 10000 + v * 100 + s;
+        }
+
+        sortPaletteBtn.addEventListener('click', () => {
+            const boxes = Array.from(palette.children);
+            boxes.sort((a, b) => hexToHsvSortValue(a.getAttribute('data-color')) - hexToHsvSortValue(b.getAttribute('data-color')));
+            palette.innerHTML = '';
+            boxes.forEach(box => palette.appendChild(box));
+        });
+
+        function addNewColorToPalette(hexValue) {
+            const exists = Array.from(palette.children).some(box => box.getAttribute('data-color') === hexValue);
+            let targetBox;
+            if (!exists) {
+                targetBox = document.createElement('div');
+                targetBox.className = 'color-box';
+                targetBox.style.backgroundColor = hexValue;
+                targetBox.setAttribute('data-color', hexValue);
+                palette.appendChild(targetBox);
+                
+                // 💡 새 색상이 추가되었음을 서버에 알림 (서버가 json에 기록하도록 함)
+                socket.emit('newColorAdded', hexValue);
+            } else {
+                targetBox = Array.from(palette.children).find(box => box.getAttribute('data-color') === hexValue);
+            }
+            selectColor(hexValue, targetBox);
+            targetBox.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+        }
+
+        function selectColor(color, targetElement) {
+            currentSelectedColor = color;
+            hexInput.value = color === 'transparent' ? '' : color;
+            document.querySelectorAll('.color-box').forEach(box => box.classList.remove('selected'));
+            targetElement.classList.add('selected');
+        }
+
+        function setMode(mode) {
+            currentMode = mode;
+            if (mode === 'pipette') {
+                pipetteBtn.style.backgroundColor = '#28a745';
+                drawModeBtn.style.backgroundColor = '#6c757d';
+            } else {
+                pipetteBtn.style.backgroundColor = '#6c757d';
+                drawModeBtn.style.backgroundColor = '#28a745';
+            }
+        }
+
+        addColorBtn.addEventListener('click', () => {
+            let val = hexInput.value.trim().toUpperCase();
+            if(!val.startsWith('#')) val = '#' + val;
+            if(/^#([A-Fa-f0-9]{3}){1,2}$/.test(val)) addNewColorToPalette(val);
+        });
+
+        palette.addEventListener('click', (e) => {
+            if (e.target.classList.contains('color-box')) {
+                selectColor(e.target.getAttribute('data-color'), e.target);
+                setMode('draw');
+            }
+        });
+
+        pipetteBtn.addEventListener('click', () => setMode('pipette'));
+        drawModeBtn.addEventListener('click', () => setMode('draw'));
+        
+        resizeView();
+    </script>
+</body>
+</html>
