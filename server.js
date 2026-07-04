@@ -1,95 +1,110 @@
 const express = require('express');
 const http = require('http');
-const { Server } = require('socket.io');
+const socketIo = require('socket.io');
+const mongoose = require('mongoose');
 const path = require('path');
-const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = socketIo(server);
 
 const PORT = process.env.PORT || 3000;
-const DATA_FILE = path.join(__dirname, 'canvas_data.json');
+const MONGO_URI = process.env.MONGO_URI;
 
-app.use(express.static(__dirname));
+// 1. MongoDB 연결 설정
+if (!MONGO_URI) {
+    console.error("❌ 에러: Render 환경 변수에 MONGO_URI가 설정되지 않았습니다!");
+    process.exit(1);
+}
+
+mongoose.connect(MONGO_URI)
+    .then(() => console.log("✔ MongoDB에 성공적으로 연결되었습니다! Data가 안전하게 보호됩니다."))
+    .catch(err => console.error("❌ MongoDB 연결 실패:", err));
+
+// 2. MongoDB 스키마 및 모델 정의 (픽셀 저장용)
+const pixelSchema = new mongoose.Schema({
+    coordinate: { type: String, unique: true }, // "x,y" 형식의 고유 키
+    x: Number,
+    y: Number,
+    color: String
+});
+const Pixel = mongoose.model('Pixel', pixelSchema);
+
+// 팔레트 색상 저장용 스키마
+const colorSchema = new mongoose.Schema({
+    hex: { type: String, unique: true }
+});
+const CustomColor = mongoose.model('CustomColor', colorSchema);
+
+// 정적 파일 서빙 (index.html이 있는 폴더 위치 지정)
+app.use(express.static(path.join(__dirname)));
 
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-const MAX_WIDTH = 4000;
-const MAX_HEIGHT = 4000;
+// 3. 소켓 통신 및 실시간 연동
+io.on('connection', async (socket) => {
+    console.log('🎈 새로운 유저가 접속했습니다.');
 
-// 💡 그림 데이터와 커스텀 색상 데이터를 함께 관리할 저장소
-let serverData = {
-    canvasMatrix: {},
-    customColors: [] // 유저들이 추가한 헥사코드가 저장될 배열
-};
-
-function loadCanvasData() {
     try {
-        if (fs.existsSync(DATA_FILE)) {
-            const fileData = fs.readFileSync(DATA_FILE, 'utf8');
-            serverData = JSON.parse(fileData);
-            // 옛날 데이터 포맷 호환성 유지용 안전장치
-            if (!serverData.canvasMatrix) {
-                serverData = { canvasMatrix: serverData, customColors: [] };
-            }
-            console.log('💾 [성공] 캔버스 및 팔레트 데이터를 불러왔습니다.');
-        } else {
-            console.log('📝 [안내] 새 데이터를 생성합니다.');
-        }
+        // DB에서 기존 픽셀 데이터 전부 긁어오기
+        const pixels = await Pixel.find({});
+        const matrix = {};
+        pixels.forEach(p => {
+            matrix[p.coordinate] = p.color;
+        });
+
+        // DB에서 커스텀 팔레트 색상 가져오기
+        const colors = await CustomColor.find({});
+        const customColors = colors.map(c => c.hex);
+
+        // 처음 접속한 유저에게 캔버스 초기 데이터 전송
+        socket.emit('initCanvas', { matrix, customColors });
     } catch (err) {
-        console.error('❌ 데이터 로드 중 오류 발생:', err);
+        console.error("데이터 로딩 중 에러 발생:", err);
     }
-}
 
-function saveCanvasData() {
-    try {
-        fs.writeFileSync(DATA_FILE, JSON.stringify(serverData), 'utf8');
-    } catch (err) {
-        console.error('❌ 데이터 저장 중 오류 발생:', err);
-    }
-}
-
-loadCanvasData();
-
-io.on('connection', (socket) => {
-    // 💡 접속 시 픽셀 데이터와 저장된 커스텀 색상 리스트를 함께 내려줌
-    socket.emit('initCanvas', { 
-        width: MAX_WIDTH, 
-        height: MAX_HEIGHT, 
-        matrix: serverData.canvasMatrix,
-        customColors: serverData.customColors 
-    });
-
-    socket.on('drawPixel', (data) => {
+    // 유저가 점을 찍었을 때
+    socket.on('drawPixel', async (data) => {
         const { x, y, color } = data;
-        if (x >= 0 && x < MAX_WIDTH && y >= 0 && y < MAX_HEIGHT) {
-            const key = `${x},${y}`;
+        const coordinate = `${x},${y}`;
+
+        // 다른 접속자들에게 실시간 브로드캐스팅
+        socket.broadcast.emit('updatePixel', data);
+
+        try {
             if (color === 'transparent') {
-                delete serverData.canvasMatrix[key];
+                // 지우개질을 하면 DB에서 삭제
+                await Pixel.deleteOne({ coordinate });
             } else {
-                serverData.canvasMatrix[key] = color;
+                // 이미 찍힌 좌표면 색상 업데이트, 새 좌표면 새로 생성 (Upsert)
+                await Pixel.updateOne(
+                    { coordinate },
+                    { x, y, color },
+                    { upsert: true }
+                );
             }
-            io.emit('updatePixel', { x, y, color });
-            saveCanvasData(); 
+        } catch (err) {
+            console.error("픽셀 저장 중 에러 발생:", err);
         }
     });
 
-    // 💡 누군가 새로운 헥사코드를 추가했을 때 처리
-    socket.on('newColorAdded', (hexColor) => {
-        if (!serverData.customColors.includes(hexColor)) {
-            serverData.customColors.push(hexColor);
-            // 다른 모든 접속자에게도 이 색상이 추가되었다고 실시간 전송
-            io.emit('syncNewColor', hexColor);
-            saveCanvasData();
+    // 유저가 새로운 헥스 코드를 팔레트에 추가했을 때
+    socket.on('newColorAdded', async (hexValue) => {
+        socket.broadcast.emit('syncNewColor', hexValue);
+        try {
+            await CustomColor.updateOne({ hex: hexValue }, { hex: hexValue }, { upsert: true });
+        } catch (err) {
+            console.error("색상 저장 중 에러 발생:", err);
         }
+    });
+
+    socket.on('disconnect', () => {
+        console.log('💤 유저가 나갔습니다.');
     });
 });
 
 server.listen(PORT, () => {
-    console.log(`=============================================`);
-    console.log(` 🚀 픽셀 및 팔레트 통합 영구 저장 활성화 완료!`);
-    console.log(`=============================================`);
+    console.log(`🚀 서버가 포트 ${PORT}에서 작동 중입니다...`);
 });
