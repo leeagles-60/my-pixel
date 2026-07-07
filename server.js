@@ -36,9 +36,9 @@ const colorSchema = new mongoose.Schema({
 });
 const CustomColor = mongoose.model('CustomColor', colorSchema);
 
-// 신설: 공유 도안(템플릿) 저장용 스키마
+// 공유 도안(템플릿) 저장용 스키마
 const templateSchema = new mongoose.Schema({
-    name: String,         // 도안 이름
+    name: String,         
     imgData: String,      // Base64 이미지 데이터 (원본 소스)
     createdAt: { type: Date, default: Date.now }
 });
@@ -56,32 +56,26 @@ io.on('connection', async (socket) => {
     console.log('📡 새로운 유저가 월드에 접속했습니다.');
 
     try {
-        // DB에서 기존 픽셀 데이터 로딩
         const pixels = await Pixel.find({});
         let matrix = {};
         pixels.forEach(p => {
             matrix[p.coordinate] = p.color;
         });
 
-        // DB에서 추가된 커스텀 색상 로딩
         const colors = await CustomColor.find({});
         let customColors = colors.map(c => c.hex);
 
-        // 신설: DB에서 공유된 도안 목록 로딩
         const templates = await Template.find({}).sort({ createdAt: -1 });
 
-        // 처음 접속한 유저에게 캔버스 초기 데이터, 커스텀 색상, 공유 도안 전달
         socket.emit('initCanvas', { matrix, customColors, templates });
     } catch (err) {
         console.error("데이터 로딩 중 에러 발생:", err);
     }
 
-    // 유저가 점을 찍었을 때
     socket.on('drawPixel', async (data) => {
         const { x, y, color } = data;
         const coordinate = `${x},${y}`;
 
-        // 다른 접속자들에게 실시간 브로드캐스팅
         socket.broadcast.emit('updatePixel', data);
 
         try {
@@ -99,7 +93,6 @@ io.on('connection', async (socket) => {
         }
     });
 
-    // 유저가 새로운 헥스 코드를 팔레트에 추가했을 때
     socket.on('newColorAdded', async (hexValue) => {
         socket.broadcast.emit('syncNewColor', hexValue);
         try {
@@ -109,16 +102,25 @@ io.on('connection', async (socket) => {
         }
     });
 
-    // 신설: 유저가 서버에 새 도안을 업로드(공유)했을 때
+    // 💡 수정됨: 유저가 서버에 새 도안을 업로드할 때 중복 여부 체크
     socket.on('uploadTemplate', async (tData) => {
         try {
+            // 동일한 이미지 파일(Base64 문자열 일치)이 있는지 먼저 조회합니다.
+            const existingTemplate = await Template.findOne({ imgData: tData.imgData });
+            
+            if (existingTemplate) {
+                // 이미 존재한다면 새로 저장하지 않고 기존 데이터를 다시 모든 유저에게 보내 UI 리프레시 유도
+                io.emit('newTemplateAdded', existingTemplate);
+                return;
+            }
+
+            // 중복되지 않은 도안일 때만 새로 생성 및 저장
             const newTemplate = new Template({
                 name: tData.name,
                 imgData: tData.imgData
             });
             await newTemplate.save();
 
-            // 모든 유저(나 포함)에게 새 도안 공유 및 갤러리 갱신 요구
             io.emit('newTemplateAdded', newTemplate);
         } catch (err) {
             console.error("도안 업로드 중 에러 발생:", err);
