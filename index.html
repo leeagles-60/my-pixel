@@ -51,7 +51,7 @@
         #floatingEraserBtn.selected { border: 4px solid #ffc107; box-shadow: 0 0 12px rgba(255, 193, 7, 0.6); }
         #pipetteBtn { bottom: 120px; background-color: #6c757d; }
 
-        /* 신설: 도안 갤러리 모달창 스타일 */
+        /* 도안 갤러리 모달창 스타일 */
         #galleryModal { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center; }
         .modal-content { background: white; padding: 16px; border-radius: 12px; width: 90%; max-width: 440px; max-height: 80vh; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box; }
         .modal-header { display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 16px; }
@@ -128,8 +128,7 @@
                 <span>🖼️ 공유 도안 갤러리</span>
                 <button class="modal-close" id="closeGalleryBtn">✕</button>
             </div>
-            <div id="galleryGrid">
-                </div>
+            <div id="galleryGrid"></div>
             <div style="font-size: 11px; color:#666; text-align:center;">
                 ※ 기기 파일에서 도안을 불러오면 자동으로 갤러리에 동기화 및 저장됩니다.
             </div>
@@ -162,13 +161,12 @@
         const templateInput = document.getElementById('templateInput');
         const clearTemplateBtn = document.getElementById('clearTemplateBtn');
 
-        // 신설된 갤러리 관련 요소들
         const openGalleryBtn = document.getElementById('openGalleryBtn');
         const closeGalleryBtn = document.getElementById('closeGalleryBtn');
         const galleryModal = document.getElementById('galleryModal');
         const galleryGrid = document.getElementById('galleryGrid');
 
-        let savedTemplates = []; // 서버로부터 동기화된 도안 배열
+        let savedTemplates = []; 
 
         const defaultColors = [
             "#000000", "#3c3c3c", "#787878", "#aaaaaa", "#d2d2d2", "#ffffff", "#600018", "#a50e1e", 
@@ -186,7 +184,7 @@
         
         let currentSelectedColor = 'transparent';
         let canvasMatrix = {}; 
-        let currentMode = 'draw'; // 'draw', 'move', 'pipette'
+        let currentMode = 'draw'; 
         
         let zoom = 1.0;
         let panX = 0, panY = 0;
@@ -252,8 +250,9 @@
                 drawPixelAt(coord.x, coord.y);
             } else if (currentMode === 'move') {
                 isPanning = true;
+                // 튕김 현상(순간이동) 해결: 현재 눌린 실제 클라이언트 좌표에서 현재 여백(pan)을 뺍니다.
                 startX = clientX - panX;
-                startY = clientY - startY;
+                startY = clientY - panY;
             }
         }
 
@@ -357,7 +356,6 @@
             setMode('draw');
         }
 
-        // 신설: 원본 이미지 픽셀 정보 가공 및 불러오기 전용 함수
         function loadTemplateFromDataUrl(dataUrl) {
             templateTargetX = parseInt(imgXInput.value) || 0;
             templateTargetY = parseInt(imgYInput.value) || 0;
@@ -378,16 +376,13 @@
             img.src = dataUrl;
         }
 
-        // 새 파일 수동 로드 시 호출 -> DB 자동 업로드 트리거 추가
         templateInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
             const reader = new FileReader();
             reader.onload = (event) => {
                 const base64Data = event.target.result;
-                // 1. 내 화면에 즉시 로드
                 loadTemplateFromDataUrl(base64Data);
-                // 2. 다른 사람도 사용하도록 서버 DB에 자동 원본 저장 업로드
                 socket.emit('uploadTemplate', { name: file.name, imgData: base64Data });
             };
             reader.readAsDataURL(file);
@@ -433,14 +428,22 @@
             ctx.restore();
         }
 
-        // 신설: 갤러리 그리드 UI를 다시 그려주는 렌더링 함수
         function renderGallery() {
             galleryGrid.innerHTML = '';
             if(savedTemplates.length === 0) {
                 galleryGrid.innerHTML = '<div style="grid-column: span 3; text-align:center; padding:20px; color:#aaa;">등록된 공유 도안이 없습니다.</div>';
                 return;
             }
-            savedTemplates.forEach(template => {
+            
+            // 중복 방지 보장: 한 번 더 클라이언트 단에서 필터링
+            const seenImages = new Set();
+            const uniqueTemplates = savedTemplates.filter(t => {
+                if (seenImages.has(t.imgData)) return false;
+                seenImages.add(t.imgData);
+                return true;
+            });
+
+            uniqueTemplates.forEach(template => {
                 const item = document.createElement('div');
                 item.className = 'gallery-item';
                 item.innerHTML = `
@@ -449,18 +452,16 @@
                 `;
                 item.addEventListener('click', () => {
                     loadTemplateFromDataUrl(template.imgData);
-                    galleryModal.style.display = 'none'; // 띄우고 모달 닫기
+                    galleryModal.style.display = 'none';
                 });
                 galleryGrid.appendChild(item);
             });
         }
 
-        // 갤러리 여닫기 이벤트
         openGalleryBtn.addEventListener('click', () => { galleryModal.style.display = 'flex'; renderGallery(); });
         closeGalleryBtn.addEventListener('click', () => { galleryModal.style.display = 'none'; });
         galleryModal.addEventListener('click', (e) => { if(e.target === galleryModal) galleryModal.style.display = 'none'; });
 
-        // 서버 초기 연동 동기화 추가
         socket.on('initCanvas', (data) => {
             canvasMatrix = data.matrix || {};
             if (data.customColors && data.customColors.length > 0) {
@@ -471,17 +472,18 @@
                     }
                 });
             }
-            // 신설: 서버에서 건네준 누적 공유도안 목록 저장
             savedTemplates = data.templates || [];
             zoom = 0.15; panX = 10; panY = 10;
             resizeView();
         });
 
-        // 누군가 새로운 도안을 공유 등록했을 때 실시간 추가
         socket.on('newTemplateAdded', (newTemplate) => {
-            savedTemplates.unshift(newTemplate); // 가장 위에 추가
-            if (galleryModal.style.display === 'flex') {
-                renderGallery();
+            // 새로 들어온 도안이 기존 목록에 없을 때만 상단에 추가
+            if (!savedTemplates.some(t => t.imgData === newTemplate.imgData)) {
+                savedTemplates.unshift(newTemplate);
+                if (galleryModal.style.display === 'flex') {
+                    renderGallery();
+                }
             }
         });
 
