@@ -36,17 +36,15 @@
         
         #infoPanel { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: #555; width: 100%; max-width: 500px; }
 
-        /* 우측 하단 스포이드 플로팅 버튼 스타일 */
-        #pipetteBtn {
+        /* 우측 하단 플로팅 버튼 공통 스타일 */
+        .floating-btn {
             position: absolute;
-            bottom: 40px;
             right: 20px;
-            width: 56px;
-            height: 56px;
+            width: 64px;
+            height: 64px;
             border-radius: 50%;
-            background-color: #6c757d;
             color: white;
-            font-size: 22px;
+            font-size: 26px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -54,9 +52,27 @@
             z-index: 100;
             border: none;
             cursor: pointer;
-            transition: background-color 0.2s, transform 0.1s;
+            transition: background-color 0.2s, transform 0.1s, border 0.1s;
         }
-        #pipetteBtn:active { transform: scale(0.95); }
+        .floating-btn:active { transform: scale(0.95); }
+
+        /* 신설: 스포이드 버튼 위에 위치하는 투명블록(지우개) 플로팅 버튼 */
+        #floatingEraserBtn {
+            bottom: 196px; /* 스포이드 버튼 위쪽 배치 */
+            background-image: linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%);
+            background-size: 12px 12px; background-position: 0 0, 0 6px, 6px -6px, -6px 0px; background-color: #fff;
+            border: 2px solid #6c757d;
+        }
+        #floatingEraserBtn.selected {
+            border: 4px solid #ffc107; /* 선택 시 노란색 테두리로 강조 */
+            box-shadow: 0 0 12px rgba(255, 193, 7, 0.6);
+        }
+
+        /* 크기를 키우고 위로 올린 스포이드 플로팅 버튼 */
+        #pipetteBtn {
+            bottom: 120px; /* 기존 40px에서 위로 이동 */
+            background-color: #6c757d;
+        }
     </style>
     <script src="/socket.io/socket.io.js"></script>
 </head>
@@ -108,7 +124,8 @@
 
     <div id="canvasContainer">
         <canvas id="pixelCanvas"></canvas>
-        <button id="pipetteBtn" title="스포이드">🧪</button>
+        <button id="floatingEraserBtn" class="floating-btn" title="투명블록(지우개)">🧽</button>
+        <button id="pipetteBtn" class="floating-btn" title="스포이드">🧪</button>
     </div>
     
     <div id="infoPanel">
@@ -127,6 +144,7 @@
         const palette = document.getElementById('palette');
         const sortPaletteBtn = document.getElementById('sortPaletteBtn');
         const pipetteBtn = document.getElementById('pipetteBtn');
+        const floatingEraserBtn = document.getElementById('floatingEraserBtn');
         const moveModeBtn = document.getElementById('moveModeBtn');
         const drawModeBtn = document.getElementById('drawModeBtn');
         const zoomIndicator = document.getElementById('zoomIndicator');
@@ -346,8 +364,11 @@
                 }
             }
             if (clickedColor === 'transparent') { clickedColor = canvasMatrix[`${coord.x},${coord.y}`] || 'transparent'; }
-            if (clickedColor === 'transparent') { selectColor('transparent', document.querySelector('.color-box.eraser')); } 
-            else { addNewColorToPalette(clickedColor); }
+            if (clickedColor === 'transparent') { 
+                selectColor('transparent', document.querySelector('.color-box.eraser')); 
+            } else { 
+                addNewColorToPalette(clickedColor); 
+            }
             setMode('draw');
         }
 
@@ -513,8 +534,14 @@
         function selectColor(color, targetElement) {
             currentSelectedColor = color;
             hexInput.value = color === 'transparent' ? '' : color;
+            
+            // 모든 팔레트 및 플로팅 버튼 선택 클래스 초기화
             document.querySelectorAll('.color-box').forEach(box => box.classList.remove('selected'));
-            targetElement.classList.add('selected');
+            floatingEraserBtn.classList.remove('selected');
+            
+            if (targetElement) {
+                targetElement.classList.add('selected');
+            }
         }
 
         function setMode(mode) {
@@ -545,6 +572,14 @@
                 selectColor(e.target.getAttribute('data-color'), e.target);
                 setMode('draw');
             }
+        });
+
+        // 신설: 우측 하단 플로팅 투명블록(지우개) 버튼 클릭 리스너
+        floatingEraserBtn.addEventListener('click', () => {
+            const paletteEraser = document.querySelector('.color-box.eraser');
+            selectColor('transparent', paletteEraser);
+            floatingEraserBtn.classList.add('selected'); // 플로팅 지우개도 시각적 선택 강조
+            setMode('draw');
         });
 
         pipetteBtn.addEventListener('click', () => {
