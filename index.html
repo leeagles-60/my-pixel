@@ -36,43 +36,31 @@
         
         #infoPanel { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: #555; width: 100%; max-width: 500px; }
 
-        /* 우측 하단 플로팅 버튼 공통 스타일 */
+        /* 플로팅 버튼 스타일 */
         .floating-btn {
-            position: absolute;
-            right: 20px;
-            width: 64px;
-            height: 64px;
-            border-radius: 50%;
-            color: white;
-            font-size: 26px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-            z-index: 100;
-            border: none;
-            cursor: pointer;
-            transition: background-color 0.2s, transform 0.1s, border 0.1s;
+            position: absolute; right: 20px; width: 64px; height: 64px; border-radius: 50%; color: white; font-size: 26px;
+            display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.3); z-index: 100; border: none; cursor: pointer; transition: background-color 0.2s, transform 0.1s, border 0.1s;
         }
         .floating-btn:active { transform: scale(0.95); }
 
-        /* 신설: 스포이드 버튼 위에 위치하는 투명블록(지우개) 플로팅 버튼 */
         #floatingEraserBtn {
-            bottom: 196px; /* 스포이드 버튼 위쪽 배치 */
+            bottom: 196px;
             background-image: linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%);
-            background-size: 12px 12px; background-position: 0 0, 0 6px, 6px -6px, -6px 0px; background-color: #fff;
-            border: 2px solid #6c757d;
+            background-size: 12px 12px; background-position: 0 0, 0 6px, 6px -6px, -6px 0px; background-color: #fff; border: 2px solid #6c757d;
         }
-        #floatingEraserBtn.selected {
-            border: 4px solid #ffc107; /* 선택 시 노란색 테두리로 강조 */
-            box-shadow: 0 0 12px rgba(255, 193, 7, 0.6);
-        }
+        #floatingEraserBtn.selected { border: 4px solid #ffc107; box-shadow: 0 0 12px rgba(255, 193, 7, 0.6); }
+        #pipetteBtn { bottom: 120px; background-color: #6c757d; }
 
-        /* 크기를 키우고 위로 올린 스포이드 플로팅 버튼 */
-        #pipetteBtn {
-            bottom: 120px; /* 기존 40px에서 위로 이동 */
-            background-color: #6c757d;
-        }
+        /* 신설: 도안 갤러리 모달창 스타일 */
+        #galleryModal { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center; }
+        .modal-content { background: white; padding: 16px; border-radius: 12px; width: 90%; max-width: 440px; max-height: 80vh; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 16px; }
+        .modal-close { font-size: 20px; cursor: pointer; background: none; border: none; color: #333; }
+        #galleryGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; overflow-y: auto; flex: 1; padding: 4px; }
+        .gallery-item { border: 1px solid #ddd; border-radius: 6px; padding: 6px; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; background: #fafafa; text-align: center; }
+        .gallery-item:hover { border-color: #007bff; background: #eef7ff; }
+        .gallery-item img { width: 100%; aspect-ratio: 1; object-fit: contain; background: #fff; border-radius: 4px; border: 1px solid #eee; image-rendering: pixelated; }
+        .gallery-item span { font-size: 10px; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
     </style>
     <script src="/socket.io/socket.io.js"></script>
 </head>
@@ -94,8 +82,9 @@
                 X <input type="number" id="imgX" class="coord-input" value="0">
                 Y <input type="number" id="imgY" class="coord-input" value="0">
                 <input type="file" id="templateInput" accept="image/*" style="display:none;">
-                <button onclick="document.getElementById('templateInput').click()" class="secondary-btn">선택</button>
-                <button id="clearTemplateBtn" class="secondary-btn" style="background-color:#dc3545; display:none;">X</button>
+                <button onclick="document.getElementById('templateInput').click()" class="secondary-btn" style="padding: 4px 6px;">기기 파일</button>
+                <button id="openGalleryBtn" style="background-color: #28a745; padding: 4px 6px;">🖼️ 갤러리</button>
+                <button id="clearTemplateBtn" class="secondary-btn" style="background-color:#dc3545; display:none; padding: 4px 6px;">X</button>
             </div>
         </div>
 
@@ -133,6 +122,20 @@
         <span id="zoomIndicator">🔍 100%</span>
     </div>
 
+    <div id="galleryModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span>🖼️ 공유 도안 갤러리</span>
+                <button class="modal-close" id="closeGalleryBtn">✕</button>
+            </div>
+            <div id="galleryGrid">
+                </div>
+            <div style="font-size: 11px; color:#666; text-align:center;">
+                ※ 기기 파일에서 도안을 불러오면 자동으로 갤러리에 동기화 및 저장됩니다.
+            </div>
+        </div>
+    </div>
+
     <script>
         const socket = io();
         const container = document.getElementById('canvasContainer');
@@ -159,6 +162,14 @@
         const templateInput = document.getElementById('templateInput');
         const clearTemplateBtn = document.getElementById('clearTemplateBtn');
 
+        // 신설된 갤러리 관련 요소들
+        const openGalleryBtn = document.getElementById('openGalleryBtn');
+        const closeGalleryBtn = document.getElementById('closeGalleryBtn');
+        const galleryModal = document.getElementById('galleryModal');
+        const galleryGrid = document.getElementById('galleryGrid');
+
+        let savedTemplates = []; // 서버로부터 동기화된 도안 배열
+
         const defaultColors = [
             "#000000", "#3c3c3c", "#787878", "#aaaaaa", "#d2d2d2", "#ffffff", "#600018", "#a50e1e", 
             "#ed1c24", "#fa8072", "#e45c1a", "#ff7f27", "#f6aa09", "#f9dd3b", "#fffabc", "#9c8431", 
@@ -179,10 +190,10 @@
         
         let zoom = 1.0;
         let panX = 0, panY = 0;
-        let isDrawing = false; // 그리기를 위한 변수
-        let isPanning = false; // 이동(드래그)을 위한 변수
+        let isDrawing = false; 
+        let isPanning = false; 
         let startX = 0, startY = 0;
-        let lastDrawCoord = { x: -1, y: -1 }; // 연속 그리기 시 중복 전송 방지
+        let lastDrawCoord = { x: -1, y: -1 }; 
 
         let initTouchDist = 0;
         let initZoom = 1.0;
@@ -230,39 +241,28 @@
 
         function getTouchDist(t1, t2) { return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY); }
 
-        // 포인터 다운 이벤트 통합 처리
         function onPointerDown(clientX, clientY, isMultiTouch = false) {
             const coord = screenToWorld(clientX, clientY);
-            
-            if (isMultiTouch) {
-                isPanning = false;
-                isDrawing = false;
-                return;
-            }
+            if (isMultiTouch) { isPanning = false; isDrawing = false; return; }
 
             if (currentMode === 'pipette') {
                 handlePipette(clientX, clientY);
             } else if (currentMode === 'draw') {
-                // 그리기 모드일 때는 한 점 찍기 및 연속 그리기 준비
                 isDrawing = true;
                 drawPixelAt(coord.x, coord.y);
             } else if (currentMode === 'move') {
-                // 이동 모드일 때는 화면 스크롤 준비
                 isPanning = true;
                 startX = clientX - panX;
-                startY = clientY - panY;
+                startY = clientY - startY;
             }
         }
 
-        // 포인터 무브 이벤트 통합 처리
         function onPointerMove(clientX, clientY) {
             const coord = screenToWorld(clientX, clientY);
             if (coord.x >= 0 && coord.x < WORLD_SIZE && coord.y >= 0 && coord.y < WORLD_SIZE) {
                 mouseIndicator.textContent = `좌표: X: ${coord.x}, Y: ${coord.y}`;
             }
-            
             if (isDrawing && currentMode === 'draw') {
-                // 선으로 슥 그리는 연속 입력 기능 구현
                 if (coord.x !== lastDrawCoord.x || coord.y !== lastDrawCoord.y) {
                     drawPixelAt(coord.x, coord.y);
                 }
@@ -273,18 +273,12 @@
             }
         }
 
-        function onPointerUp() {
-            isDrawing = false;
-            isPanning = false;
-            lastDrawCoord = { x: -1, y: -1 };
-        }
+        function onPointerUp() { isDrawing = false; isPanning = false; lastDrawCoord = { x: -1, y: -1 }; }
 
-        // 마우스 리스너
         container.addEventListener('mousedown', (e) => { if (e.button === 0) onPointerDown(e.clientX, e.clientY); });
         window.addEventListener('mousemove', (e) => { onPointerMove(e.clientX, e.clientY); });
         window.addEventListener('mouseup', onPointerUp);
 
-        // 터치 리스너 (모바일 대응)
         container.addEventListener('touchstart', (e) => {
             const rect = container.getBoundingClientRect();
             const touch = e.touches[0];
@@ -335,27 +329,21 @@
             updateTransform();
         });
 
-        // 실제 픽셀을 찍는 함수
         function drawPixelAt(x, y) {
             if (x < 0 || x >= WORLD_SIZE || y < 0 || y >= WORLD_SIZE) return;
-            
             lastDrawCoord = { x, y };
             if (currentSelectedColor === 'transparent') { delete canvasMatrix[`${x},${y}`]; } 
             else { canvasMatrix[`${x},${y}`] = currentSelectedColor; }
-            
             redrawCanvas();
             socket.emit('drawPixel', { x: x, y: y, color: currentSelectedColor });
         }
 
-        // 스포이드 기능 처리
         function handlePipette(clientX, clientY) {
             const coord = screenToWorld(clientX, clientY);
             if (coord.x < 0 || coord.x >= WORLD_SIZE || coord.y < 0 || coord.y >= WORLD_SIZE) return;
-
             let clickedColor = 'transparent';
             if (templatePixelData) {
-                const tx = coord.x - templateTargetX;
-                const ty = coord.y - templateTargetY;
+                const tx = coord.x - templateTargetX; const ty = coord.y - templateTargetY;
                 if (tx >= 0 && tx < templateWidth && ty >= 0 && ty < templateHeight) {
                     const idx = (ty * templateWidth + tx) * 4;
                     if (templatePixelData[idx + 3] > 30) {
@@ -364,36 +352,43 @@
                 }
             }
             if (clickedColor === 'transparent') { clickedColor = canvasMatrix[`${coord.x},${coord.y}`] || 'transparent'; }
-            if (clickedColor === 'transparent') { 
-                selectColor('transparent', document.querySelector('.color-box.eraser')); 
-            } else { 
-                addNewColorToPalette(clickedColor); 
-            }
+            if (clickedColor === 'transparent') { selectColor('transparent', document.querySelector('.color-box.eraser')); } 
+            else { addNewColorToPalette(clickedColor); }
             setMode('draw');
         }
 
+        // 신설: 원본 이미지 픽셀 정보 가공 및 불러오기 전용 함수
+        function loadTemplateFromDataUrl(dataUrl) {
+            templateTargetX = parseInt(imgXInput.value) || 0;
+            templateTargetY = parseInt(imgYInput.value) || 0;
+            const img = new Image();
+            img.onload = () => {
+                templateWidth = img.width; templateHeight = img.height;
+                const hiddenCanvas = document.createElement('canvas');
+                hiddenCanvas.width = templateWidth; hiddenCanvas.height = templateHeight;
+                const hiddenCtx = hiddenCanvas.getContext('2d');
+                hiddenCtx.drawImage(img, 0, 0);
+                templatePixelData = hiddenCtx.getImageData(0, 0, templateWidth, templateHeight).data;
+                clearTemplateBtn.style.display = 'inline-block';
+                zoom = 1.0;
+                panX = (container.clientWidth / 2) - ((templateTargetX + templateWidth / 2) * PIXEL_SIZE * zoom);
+                panY = (container.clientHeight / 2) - ((templateTargetY + templateHeight / 2) * PIXEL_SIZE * zoom);
+                updateTransform();
+            };
+            img.src = dataUrl;
+        }
+
+        // 새 파일 수동 로드 시 호출 -> DB 자동 업로드 트리거 추가
         templateInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
-            templateTargetX = parseInt(imgXInput.value) || 0;
-            templateTargetY = parseInt(imgYInput.value) || 0;
             const reader = new FileReader();
             reader.onload = (event) => {
-                const img = new Image();
-                img.onload = () => {
-                    templateWidth = img.width; templateHeight = img.height;
-                    const hiddenCanvas = document.createElement('canvas');
-                    hiddenCanvas.width = templateWidth; hiddenCanvas.height = templateHeight;
-                    const hiddenCtx = hiddenCanvas.getContext('2d');
-                    hiddenCtx.drawImage(img, 0, 0);
-                    templatePixelData = hiddenCtx.getImageData(0, 0, templateWidth, templateHeight).data;
-                    clearTemplateBtn.style.display = 'inline-block';
-                    zoom = 1.0;
-                    panX = (container.clientWidth / 2) - ((templateTargetX + templateWidth / 2) * PIXEL_SIZE * zoom);
-                    panY = (container.clientHeight / 2) - ((templateTargetY + templateHeight / 2) * PIXEL_SIZE * zoom);
-                    updateTransform();
-                };
-                img.src = event.target.result;
+                const base64Data = event.target.result;
+                // 1. 내 화면에 즉시 로드
+                loadTemplateFromDataUrl(base64Data);
+                // 2. 다른 사람도 사용하도록 서버 DB에 자동 원본 저장 업로드
+                socket.emit('uploadTemplate', { name: file.name, imgData: base64Data });
             };
             reader.readAsDataURL(file);
         });
@@ -404,33 +399,20 @@
 
         function redrawCanvas() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.save();
-            ctx.translate(panX, panY);
-            ctx.scale(zoom, zoom);
-
+            ctx.save(); ctx.translate(panX, panY); ctx.scale(zoom, zoom);
             const startX = Math.max(0, Math.floor(-panX / (PIXEL_SIZE * zoom)));
             const startY = Math.max(0, Math.floor(-panY / (PIXEL_SIZE * zoom)));
             const endX = Math.min(WORLD_SIZE, Math.ceil((canvas.width - panX) / (PIXEL_SIZE * zoom)));
             const endY = Math.min(WORLD_SIZE, Math.ceil((canvas.height - panY) / (PIXEL_SIZE * zoom)));
-
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillRect(startX * PIXEL_SIZE, startY * PIXEL_SIZE, (endX - startX) * PIXEL_SIZE, (endY - startY) * PIXEL_SIZE);
-
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.04)';
-            ctx.lineWidth = 1 / zoom;
-            ctx.beginPath();
+            ctx.fillStyle = '#FFFFFF'; ctx.fillRect(startX * PIXEL_SIZE, startY * PIXEL_SIZE, (endX - startX) * PIXEL_SIZE, (endY - startY) * PIXEL_SIZE);
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.04)'; ctx.lineWidth = 1 / zoom; ctx.beginPath();
             for (let x = startX; x <= endX; x++) { ctx.moveTo(x * PIXEL_SIZE, startY * PIXEL_SIZE); ctx.lineTo(x * PIXEL_SIZE, endY * PIXEL_SIZE); }
             for (let y = startY; y <= endY; y++) { ctx.moveTo(startX * PIXEL_SIZE, y * PIXEL_SIZE); ctx.lineTo(endX * PIXEL_SIZE, y * PIXEL_SIZE); }
             ctx.stroke();
-
             Object.keys(canvasMatrix).forEach(key => {
                 const [x, y] = key.split(',').map(Number);
-                if (x >= startX && x < endX && y >= startY && y < endY) {
-                    ctx.fillStyle = canvasMatrix[key];
-                    ctx.fillRect(x * PIXEL_SIZE, y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE);
-                }
+                if (x >= startX && x < endX && y >= startY && y < endY) { ctx.fillStyle = canvasMatrix[key]; ctx.fillRect(x * PIXEL_SIZE, y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE); }
             });
-
             if (templatePixelData) {
                 const tStartX = Math.max(startX, templateTargetX); const tStartY = Math.max(startY, templateTargetY);
                 const tEndX = Math.min(endX, templateTargetX + templateWidth); const tEndY = Math.min(endY, templateTargetY + templateHeight);
@@ -441,8 +423,7 @@
                             const targetColor = "#" + ((1 << 24) + (templatePixelData[idx] << 16) + (templatePixelData[idx + 1] << 8) + templatePixelData[idx + 2]).toString(16).slice(1).toUpperCase();
                             const currentColor = (canvasMatrix[`${x},${y}`] || 'transparent').toUpperCase();
                             if (currentColor !== targetColor) {
-                                ctx.fillStyle = targetColor;
-                                const dotSize = 3; const offset = (PIXEL_SIZE - dotSize) / 2;
+                                ctx.fillStyle = targetColor; const dotSize = 3; const offset = (PIXEL_SIZE - dotSize) / 2;
                                 ctx.fillRect(x * PIXEL_SIZE + offset, y * PIXEL_SIZE + offset, dotSize, dotSize);
                             }
                         }
@@ -452,32 +433,62 @@
             ctx.restore();
         }
 
+        // 신설: 갤러리 그리드 UI를 다시 그려주는 렌더링 함수
+        function renderGallery() {
+            galleryGrid.innerHTML = '';
+            if(savedTemplates.length === 0) {
+                galleryGrid.innerHTML = '<div style="grid-column: span 3; text-align:center; padding:20px; color:#aaa;">등록된 공유 도안이 없습니다.</div>';
+                return;
+            }
+            savedTemplates.forEach(template => {
+                const item = document.createElement('div');
+                item.className = 'gallery-item';
+                item.innerHTML = `
+                    <img src="${template.imgData}" alt="${template.name}">
+                    <span>${template.name || '무제 도안'}</span>
+                `;
+                item.addEventListener('click', () => {
+                    loadTemplateFromDataUrl(template.imgData);
+                    galleryModal.style.display = 'none'; // 띄우고 모달 닫기
+                });
+                galleryGrid.appendChild(item);
+            });
+        }
+
+        // 갤러리 여닫기 이벤트
+        openGalleryBtn.addEventListener('click', () => { galleryModal.style.display = 'flex'; renderGallery(); });
+        closeGalleryBtn.addEventListener('click', () => { galleryModal.style.display = 'none'; });
+        galleryModal.addEventListener('click', (e) => { if(e.target === galleryModal) galleryModal.style.display = 'none'; });
+
+        // 서버 초기 연동 동기화 추가
         socket.on('initCanvas', (data) => {
             canvasMatrix = data.matrix || {};
             if (data.customColors && data.customColors.length > 0) {
                 data.customColors.forEach(color => {
                     const exists = Array.from(palette.children).some(box => box.getAttribute('data-color') === color);
                     if (!exists) {
-                        const box = document.createElement('div');
-                        box.className = 'color-box';
-                        box.style.backgroundColor = color;
-                        box.setAttribute('data-color', color);
-                        palette.appendChild(box);
+                        const box = document.createElement('div'); box.className = 'color-box'; box.style.backgroundColor = color; box.setAttribute('data-color', color); palette.appendChild(box);
                     }
                 });
             }
+            // 신설: 서버에서 건네준 누적 공유도안 목록 저장
+            savedTemplates = data.templates || [];
             zoom = 0.15; panX = 10; panY = 10;
             resizeView();
+        });
+
+        // 누군가 새로운 도안을 공유 등록했을 때 실시간 추가
+        socket.on('newTemplateAdded', (newTemplate) => {
+            savedTemplates.unshift(newTemplate); // 가장 위에 추가
+            if (galleryModal.style.display === 'flex') {
+                renderGallery();
+            }
         });
 
         socket.on('syncNewColor', (hexValue) => {
             const exists = Array.from(palette.children).some(box => box.getAttribute('data-color') === hexValue);
             if (!exists) {
-                const targetBox = document.createElement('div');
-                targetBox.className = 'color-box';
-                targetBox.style.backgroundColor = hexValue;
-                targetBox.setAttribute('data-color', hexValue);
-                palette.appendChild(targetBox);
+                const targetBox = document.createElement('div'); targetBox.className = 'color-box'; targetBox.style.backgroundColor = hexValue; targetBox.setAttribute('data-color', hexValue); palette.appendChild(targetBox);
             }
         });
 
@@ -489,11 +500,8 @@
 
         function hexToHsvSortValue(hex) {
             if (hex === 'transparent') return -1;
-            let r = parseInt(hex.substring(1, 3), 16) / 255;
-            let g = parseInt(hex.substring(3, 5), 16) / 255;
-            let b = parseInt(hex.substring(5, 7), 16) / 255;
-            let max = Math.max(r, g, b), min = Math.min(r, g, b);
-            let h, s, v = max; let d = max - min;
+            let r = parseInt(hex.substring(1, 3), 16) / 255; let g = parseInt(hex.substring(3, 5), 16) / 255; let b = parseInt(hex.substring(5, 7), 16) / 255;
+            let max = Math.max(r, g, b), min = Math.min(r, g, b); let h, s, v = max; let d = max - min;
             s = max === 0 ? 0 : d / max;
             if (max === min) h = 0;
             else {
@@ -510,19 +518,14 @@
         sortPaletteBtn.addEventListener('click', () => {
             const boxes = Array.from(palette.children);
             boxes.sort((a, b) => hexToHsvSortValue(a.getAttribute('data-color')) - hexToHsvSortValue(b.getAttribute('data-color')));
-            palette.innerHTML = '';
-            boxes.forEach(box => palette.appendChild(box));
+            palette.innerHTML = ''; boxes.forEach(box => palette.appendChild(box));
         });
 
         function addNewColorToPalette(hexValue) {
             const exists = Array.from(palette.children).some(box => box.getAttribute('data-color') === hexValue);
             let targetBox;
             if (!exists) {
-                targetBox = document.createElement('div');
-                targetBox.className = 'color-box';
-                targetBox.style.backgroundColor = hexValue;
-                targetBox.setAttribute('data-color', hexValue);
-                palette.appendChild(targetBox);
+                targetBox = document.createElement('div'); targetBox.className = 'color-box'; targetBox.style.backgroundColor = hexValue; targetBox.setAttribute('data-color', hexValue); palette.appendChild(targetBox);
                 socket.emit('newColorAdded', hexValue);
             } else {
                 targetBox = Array.from(palette.children).find(box => box.getAttribute('data-color') === hexValue);
@@ -534,30 +537,19 @@
         function selectColor(color, targetElement) {
             currentSelectedColor = color;
             hexInput.value = color === 'transparent' ? '' : color;
-            
-            // 모든 팔레트 및 플로팅 버튼 선택 클래스 초기화
             document.querySelectorAll('.color-box').forEach(box => box.classList.remove('selected'));
             floatingEraserBtn.classList.remove('selected');
-            
-            if (targetElement) {
-                targetElement.classList.add('selected');
-            }
+            if (targetElement) { targetElement.classList.add('selected'); }
         }
 
         function setMode(mode) {
             currentMode = mode;
             if (mode === 'pipette') {
-                pipetteBtn.style.backgroundColor = '#28a745';
-                moveModeBtn.style.backgroundColor = '#6c757d';
-                drawModeBtn.style.backgroundColor = '#6c757d';
+                pipetteBtn.style.backgroundColor = '#28a745'; moveModeBtn.style.backgroundColor = '#6c757d'; drawModeBtn.style.backgroundColor = '#6c757d';
             } else if (mode === 'move') {
-                pipetteBtn.style.backgroundColor = '#6c757d';
-                moveModeBtn.style.backgroundColor = '#007bff';
-                drawModeBtn.style.backgroundColor = '#6c757d';
+                pipetteBtn.style.backgroundColor = '#6c757d'; moveModeBtn.style.backgroundColor = '#007bff'; drawModeBtn.style.backgroundColor = '#6c757d';
             } else {
-                pipetteBtn.style.backgroundColor = '#6c757d';
-                moveModeBtn.style.backgroundColor = '#6c757d';
-                drawModeBtn.style.backgroundColor = '#28a745';
+                pipetteBtn.style.backgroundColor = '#6c757d'; moveModeBtn.style.backgroundColor = '#6c757d'; drawModeBtn.style.backgroundColor = '#28a745';
             }
         }
 
@@ -568,23 +560,16 @@
         });
 
         palette.addEventListener('click', (e) => {
-            if (e.target.classList.contains('color-box')) {
-                selectColor(e.target.getAttribute('data-color'), e.target);
-                setMode('draw');
-            }
+            if (e.target.classList.contains('color-box')) { selectColor(e.target.getAttribute('data-color'), e.target); setMode('draw'); }
         });
 
-        // 신설: 우측 하단 플로팅 투명블록(지우개) 버튼 클릭 리스너
         floatingEraserBtn.addEventListener('click', () => {
             const paletteEraser = document.querySelector('.color-box.eraser');
-            selectColor('transparent', paletteEraser);
-            floatingEraserBtn.classList.add('selected'); // 플로팅 지우개도 시각적 선택 강조
-            setMode('draw');
+            selectColor('transparent', paletteEraser); floatingEraserBtn.classList.add('selected'); setMode('draw');
         });
 
         pipetteBtn.addEventListener('click', () => {
-            if(currentMode === 'pipette') setMode('draw');
-            else setMode('pipette');
+            if(currentMode === 'pipette') setMode('draw'); else setMode('pipette');
         });
         moveModeBtn.addEventListener('click', () => setMode('move'));
         drawModeBtn.addEventListener('click', () => setMode('draw'));
